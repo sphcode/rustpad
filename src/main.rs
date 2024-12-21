@@ -1,7 +1,7 @@
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use crossterm::{event, terminal};
 use std::time::Duration;
-use std::result::Result;
+
 struct CleanUp;
 
 impl Drop for CleanUp {
@@ -11,9 +11,34 @@ impl Drop for CleanUp {
 }
 
 struct Reader;
+struct Editor {
+    reader: Reader,
+}
+
+impl Editor {
+    fn new() -> Self {
+        Self { reader: Reader }
+    }
+
+    fn process_keypress(&self) -> crossterm::Result<bool> {
+        match self.reader.read_key()? {
+            KeyEvent {
+                code: KeyCode::Char('q'),
+                modifiers: event::KeyModifiers::CONTROL,
+            } => return Ok(false),
+            _ => {}
+        }
+        Ok(true)
+    }
+
+    fn run(&self) -> crossterm::Result<bool> {
+        self.process_keypress()
+    }
+}
 
 impl Reader {
-    fn read_key(&self) -> Result<KeyEvent, Box<dyn std::error::Error>> {
+    
+    fn read_key(&self) -> crossterm::Result<KeyEvent> {
         loop {
             if event::poll(Duration::from_millis(500))? {
                 if let Event::Key(event) = event::read()? {
@@ -24,17 +49,7 @@ impl Reader {
     }
 }
 
-struct Editor {
-    reader: Reader,
-}
-
-impl Editor {
-    fn new() -> Self {
-        Self { reader: Reader }
-    }
-}
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> crossterm::Result<()> {
     let _clean_up = CleanUp;
     terminal::enable_raw_mode()?;
     loop {
@@ -43,8 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match event {
                     KeyEvent {
                         code: KeyCode::Char('q'),
-                        modifiers: event::KeyModifiers::CONTROL,
-                        ..
+                        modifiers: event::KeyModifiers::CONTROL, /* modify */
                     } => break,
                     _ => {
                         //todo
