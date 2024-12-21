@@ -18,11 +18,12 @@ struct Output {
     editor_contents: EditorContents,
 }
 
+
 impl Output {
     fn new() -> Self {
         let win_size = terminal::size()
             .map(|(x, y)| (x as usize, y as usize))
-            .unwrap(); 
+            .unwrap();
         Self {
             win_size,
             editor_contents: EditorContents::new(),
@@ -38,6 +39,13 @@ impl Output {
         let screen_rows = self.win_size.1;
         for i in 0..screen_rows {
             self.editor_contents.push('~');
+            //add the following
+            queue!(
+                self.editor_contents,
+                terminal::Clear(ClearType::UntilNewLine)
+            )
+            .unwrap();
+            //end
             if i < screen_rows - 1 {
                 self.editor_contents.push_str("\r\n");
             }
@@ -45,9 +53,10 @@ impl Output {
     }
 
     fn refresh_screen(&mut self) -> crossterm::Result<()> {
-        queue!(self.editor_contents, terminal::Clear(ClearType::All), cursor::MoveTo(0, 0))?;
+        //modify
+        queue!(self.editor_contents, cursor::Hide, cursor::MoveTo(0, 0))?;
         self.draw_rows();
-        queue!(self.editor_contents, cursor::MoveTo(0, 0))?;
+        queue!(self.editor_contents, cursor::MoveTo(0, 0), cursor::Show)?;
         self.editor_contents.flush()
     }
 }
