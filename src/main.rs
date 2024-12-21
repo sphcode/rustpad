@@ -4,6 +4,7 @@ use crossterm::{cursor, event, execute, queue, terminal};
 use std::io;
 use std::io::{stdout, Write};
 use std::time::Duration;
+use std::env;
 struct CleanUp;
 
 impl Drop for CleanUp {
@@ -37,9 +38,25 @@ impl Output {
 
     fn draw_rows(&mut self) {
         let screen_rows = self.win_size.1;
+        let screen_columns = self.win_size.0;
         for i in 0..screen_rows {
-            self.editor_contents.push('~');
-            //add the following
+            if i == screen_rows / 3 {
+                let name = env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "Unknown".to_string());
+                let version = env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "Unknown".to_string());
+                let mut welcome = format!("{} --- Version {}", name, version);
+                if welcome.len() > screen_columns {
+                    welcome.truncate(screen_columns)
+                }
+                let mut padding = (screen_columns - welcome.len()) / 2;
+                if padding != 0 {
+                    self.editor_contents.push('~');
+                    padding -= 1
+                }
+                (0..padding).for_each(|_| self.editor_contents.push(' '));
+                self.editor_contents.push_str(&welcome);
+            } else {
+                self.editor_contents.push('~');
+            }
             queue!(
                 self.editor_contents,
                 terminal::Clear(ClearType::UntilNewLine)
