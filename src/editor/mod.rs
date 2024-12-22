@@ -1,11 +1,17 @@
+mod editor_contents;
+mod editor_rows;
+mod cursor_controller;
+mod reader;
+
+use editor_contents::EditorContents;
+use editor_rows::EditorRows;
+use cursor_controller::CursorController;
+use reader::Reader;
 use crossterm::event::*;
 use crossterm::terminal::ClearType;
-use crossterm::{cursor, event, execute, queue, terminal};
-use std::cmp::Ordering;
+use crossterm::{cursor, execute, queue, terminal};
+use std::{cmp, env};
 use std::io::{stdout, Write};
-use std::path::Path;
-use std::time::Duration;
-use std::{cmp, env, fs, io};
 
 struct Output {
     win_size: (usize, usize),
@@ -94,38 +100,6 @@ impl Output {
     }
 }
 
-struct EditorRows {
-    row_contents: Vec<Box<str>>,
-}
-
-impl EditorRows {
-    fn new() -> Self {
-        let mut arg = env::args();
-
-        match arg.nth(1) {
-            None => Self {
-                row_contents: Vec::new(),
-            },
-            Some(file) => Self::from_file(file.as_ref()),
-        }
-    }
-
-    fn from_file(file: &Path) -> Self {
-        let file_contents = fs::read_to_string(file).expect("Unable to read file");
-        Self {
-            row_contents: file_contents.lines().map(|it| it.into()).collect(),
-        }
-    }
-
-    fn number_of_rows(&self) -> usize {
-        self.row_contents.len()
-    }
-
-    fn get_row(&self, at:usize) -> &str {
-        &self.row_contents[at]
-    }
-}
-
 pub struct Editor {
     reader: Reader,
     output: Output,
@@ -182,135 +156,5 @@ impl Drop for Editor {
     fn drop(&mut self) {
         terminal::disable_raw_mode().expect("Unable to disable raw mode");
         Output::clear_screen().expect("Error");
-    }
-}
-
-struct Reader;
-
-impl Reader {
-    fn read_key(&self) -> crossterm::Result<KeyEvent> {
-        loop {
-            if event::poll(Duration::from_millis(500))? {
-                if let Event::Key(event) = event::read()? {
-                    return Ok(event);
-                }
-            }
-        }
-    }
-}
-
-struct EditorContents {
-    content: String,
-}
-
-impl EditorContents {
-    fn new() -> Self {
-        Self {
-            content: String::new(),
-        }
-    }
-    
-    fn push(&mut self, ch: char) {
-        self.content.push(ch)
-    }
-
-    fn push_str(&mut self, string: &str) {
-        self.content.push_str(string)
-    }
-}
-
-impl io::Write for EditorContents {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        match std::str::from_utf8(buf) {
-            Ok(s) => {
-                self.content.push_str(s);
-                Ok(s.len())
-            }
-            Err(_) => Err(io::ErrorKind::WriteZero.into()),
-        }
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        let out = write!(stdout(), "{}", self.content);
-        stdout().flush()?;
-        self.content.clear();
-        out
-    }
-}
-
-struct CursorController {
-    cursor_x: usize,
-    cursor_y: usize,
-    screen_rows: usize,
-    screen_columns: usize,
-    row_offset: usize,
-    column_offset:usize
-}
-
-impl CursorController {
-    fn new(win_size: (usize, usize)) -> CursorController {
-        Self {
-            cursor_x: 0,
-            cursor_y: 0,
-            screen_columns: win_size.0,
-            screen_rows: win_size.1,
-            row_offset: 0,
-            column_offset:0
-        }
-    }
-
-    fn scroll(&mut self) {
-        self.row_offset = cmp::min(self.row_offset, self.cursor_y);
-        if self.cursor_y >= self.row_offset + self.screen_rows {
-            self.row_offset = self.cursor_y - self.screen_rows + 1;
-        }
-        self.column_offset = cmp::min(self.column_offset, self.cursor_x);
-        if self.cursor_x >= self.column_offset + self.screen_columns {
-            self.column_offset = self.cursor_x - self.screen_columns + 1;
-        }
-    }
-
-    fn move_cursor(&mut self, direction: KeyCode, editor_rows: &EditorRows) {
-        let number_of_rows = editor_rows.number_of_rows();
-        match direction {
-            KeyCode::Up => {
-                self.cursor_y = self.cursor_y.saturating_sub(1);
-            }
-            KeyCode::Left => {
-                if self.cursor_x != 0 {
-                    self.cursor_x -= 1;
-                }
-                else if self.cursor_y > 0 {
-                    self.cursor_y -= 1;
-                    self.cursor_x = editor_rows.get_row(self.cursor_y).len();
-                }
-            }
-            KeyCode::Down => {
-                if self.cursor_y < number_of_rows {
-                    self.cursor_y += 1;
-                }
-            }
-            KeyCode::Right => {
-                if self.cursor_y < number_of_rows {
-                    match self.cursor_x.cmp(&editor_rows.get_row(self.cursor_y).len()) {
-                        Ordering::Less => self.cursor_x += 1,
-                        Ordering::Equal => {
-                            self.cursor_y += 1;
-                            self.cursor_x = 0
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            KeyCode::End => self.cursor_x = self.screen_columns - 1,
-            KeyCode::Home => self.cursor_x = 0,
-            _ => unimplemented!(),
-        }
-        let row_len = if self.cursor_y < number_of_rows {
-            editor_rows.get_row(self.cursor_y).len()
-        } else {
-            0
-        };
-        self.cursor_x = cmp::min(self.cursor_x, row_len);
     }
 }
