@@ -1,5 +1,4 @@
-use std::ops::Range;
-
+use std::{fmt, ops::Range};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
@@ -24,13 +23,19 @@ struct TextFragment {
     replacement: Option<char>,
 }
 
+#[derive(Default)]
 pub struct Line {
     fragments: Vec<TextFragment>,
 }
 
 impl Line {
     pub fn from(line_str: &str) -> Self {
-        let fragments = line_str
+        let fragments = Self::str_to_fragments(line_str);
+        Self { fragments }
+    }
+
+    fn str_to_fragments(line_str: &str) -> Vec<TextFragment> {
+        line_str
             .graphemes(true)
             .map(|grapheme| {
                 let (replacement, rendered_width) = Self::replacement_character(grapheme)
@@ -52,8 +57,7 @@ impl Line {
                     replacement,
                 }
             })
-            .collect();
-        Self { fragments }
+            .collect()
     }
 
     fn replacement_character(for_str: &str) -> Option<char> {
@@ -113,5 +117,67 @@ impl Line {
                 GraphemeWidth::Full => 2,
             })
             .sum()
+    }
+    pub fn width(&self) -> usize {
+        self.width_until(self.grapheme_count())
+    }
+
+    pub fn insert_char(&mut self, character: char, at: usize) {
+        let mut result = String::new();
+
+        for (index, fragment) in self.fragments.iter().enumerate() {
+            if index == at {
+                result.push(character);
+            }
+            result.push_str(&fragment.grapheme);
+        }
+        if at >= self.fragments.len() {
+            result.push(character);
+        }
+        self.fragments = Self::str_to_fragments(&result);
+    }
+    pub fn append_char(&mut self, character: char) {
+        self.insert_char(character, self.grapheme_count());
+    }
+    pub fn delete(&mut self, at: usize) {
+        let mut result = String::new();
+
+        for (index, fragment) in self.fragments.iter().enumerate() {
+            if index != at {
+                result.push_str(&fragment.grapheme);
+            }
+        }
+        self.fragments = Self::str_to_fragments(&result);
+    }
+
+    pub fn delete_last(&mut self) {
+        self.delete(self.grapheme_count().saturating_sub(1));
+    }
+
+    pub fn append(&mut self, other: &Self) {
+        let mut concat = self.to_string();
+        concat.push_str(&other.to_string());
+        self.fragments = Self::str_to_fragments(&concat);
+    }
+
+    pub fn split(&mut self, at: usize) -> Self {
+        if at > self.fragments.len() {
+            return Self::default();
+        }
+        let remainder = self.fragments.split_off(at);
+        Self {
+            fragments: remainder,
+        }
+    }
+}
+
+impl fmt::Display for Line {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        let result: String = self
+            .fragments
+            .iter()
+            .map(|fragment| fragment.grapheme.clone())
+            .collect();
+        write!(formatter, "{result}")
     }
 }
