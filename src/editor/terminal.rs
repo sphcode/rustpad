@@ -1,11 +1,13 @@
-use core::fmt::Display;
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::style::Print;
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, size, Clear, ClearType};
+use crossterm::terminal::{
+    disable_raw_mode, enable_raw_mode, size, Clear, ClearType, EnterAlternateScreen,
+    LeaveAlternateScreen,
+};
 use crossterm::{queue, Command};
 use std::io::{stdout, Error, Write};
 
-#[derive(Copy, Clone)]
+#[derive(Default, Copy, Clone)]
 pub struct Size {
     pub height: usize,
     pub width: usize,
@@ -15,6 +17,16 @@ pub struct Position {
     pub col: usize,
     pub row: usize,
 }
+
+impl Position {
+    pub const fn saturating_sub(self, other: Self) -> Self {
+        Self {
+            row: self.row.saturating_sub(other.row),
+            col: self.col.saturating_sub(other.col),
+        }
+    }
+}
+
 /// Represents the Terminal.
 /// Edge Case for platforms where `usize` < `u16`:
 /// Regardless of the actual size of the Terminal, this representation
@@ -25,12 +37,15 @@ pub struct Terminal;
 
 impl Terminal {
     pub fn terminate() -> Result<(), Error> {
+        Self::leave_alternate_screen()?;
+        Self::show_caret()?;
         Self::execute()?;
         disable_raw_mode()?;
         Ok(())
     }
     pub fn initialize() -> Result<(), Error> {
         enable_raw_mode()?;
+        Self::enter_alternate_screen()?;
         Self::clear_screen()?;
         Self::execute()?;
         Ok(())
@@ -52,6 +67,14 @@ impl Terminal {
         Self::queue_command(MoveTo(position.col as u16, position.row as u16))?;
         Ok(())
     }
+    pub fn enter_alternate_screen() -> Result<(), Error> {
+        Self::queue_command(EnterAlternateScreen)?;
+        Ok(())
+    }
+    pub fn leave_alternate_screen() -> Result<(), Error> {
+        Self::queue_command(LeaveAlternateScreen)?;
+        Ok(())
+    }
     pub fn hide_caret() -> Result<(), Error> {
         Self::queue_command(Hide)?;
         Ok(())
@@ -60,11 +83,16 @@ impl Terminal {
         Self::queue_command(Show)?;
         Ok(())
     }
-    pub fn print<T: Display>(string: T) -> Result<(), Error> {
+    pub fn print(string: &str) -> Result<(), Error> {
         Self::queue_command(Print(string))?;
         Ok(())
     }
-
+    pub fn print_row(row: usize, line_text: &str) -> Result<(), Error> {
+        Self::move_caret_to(Position { row, col: 0 })?;
+        Self::clear_line()?;
+        Self::print(line_text)?;
+        Ok(())
+    }
     /// Returns the current size of this Terminal.
     /// Edge Case for systems with `usize` < `u16`:
     /// * A `Size` representing the terminal size. Any coordinate `z` truncated to `usize` if `usize` < `z` < `u16`
