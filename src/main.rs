@@ -41,14 +41,16 @@ impl Output {
     }
 
     fn move_cursor(&mut self, direction: KeyCode) {
-        self.cursor_controller.move_cursor(direction);
+        self.cursor_controller
+        .move_cursor(direction, self.editor_rows.number_of_rows());
     }
 
     fn draw_rows(&mut self) {
         let screen_rows = self.win_size.1;
         let screen_columns = self.win_size.0;
         for i in 0..screen_rows {
-            if i >= self.editor_rows.number_of_rows() {
+            let file_row = i + self.cursor_controller.row_offset;
+            if file_row >= self.editor_rows.number_of_rows() {
                 if self.editor_rows.number_of_rows() == 0 && i == screen_rows / 3 {
                     let name = env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "Unknown".to_string());
                     let version = env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "Unknown".to_string());
@@ -67,9 +69,9 @@ impl Output {
                     self.editor_contents.push('~');
                 }
             } else {
-                let len = cmp::min(self.editor_rows.get_row(i).len(), screen_columns);
+                let len = cmp::min(self.editor_rows.get_row(file_row).len(), screen_columns);
                 self.editor_contents
-                    .push_str(&self.editor_rows.get_row(i)[..len])
+                    .push_str(&self.editor_rows.get_row(file_row)[..len])
             }
             queue!(
                 self.editor_contents,
@@ -83,10 +85,11 @@ impl Output {
     }
 
     fn refresh_screen(&mut self) -> crossterm::Result<()> {
+        self.cursor_controller.scroll();
         queue!(self.editor_contents, cursor::Hide, cursor::MoveTo(0, 0))?;
         self.draw_rows();
         let cursor_x = self.cursor_controller.cursor_x;
-        let cursor_y = self.cursor_controller.cursor_y;
+        let cursor_y = self.cursor_controller.cursor_y - self.cursor_controller.row_offset;
         queue!(
             self.editor_contents,
             cursor::MoveTo(cursor_x as u16, cursor_y as u16),
@@ -251,7 +254,14 @@ impl CursorController {
         }
     }
 
-    fn move_cursor(&mut self, direction: KeyCode) {
+    fn scroll(&mut self) {
+        self.row_offset = cmp::min(self.row_offset, self.cursor_y);
+        if self.cursor_y >= self.row_offset + self.screen_rows {
+            self.row_offset = self.cursor_y - self.screen_rows + 1;
+        }
+    }
+
+    fn move_cursor(&mut self, direction: KeyCode, number_of_rows: usize) {
         match direction {
             KeyCode::Up => {
                 self.cursor_y = self.cursor_y.saturating_sub(1);
@@ -262,7 +272,7 @@ impl CursorController {
                 }
             }
             KeyCode::Down => {
-                if self.cursor_y != self.screen_rows - 1 {
+                if self.cursor_y < number_of_rows {
                     self.cursor_y += 1;
                 }
             }
