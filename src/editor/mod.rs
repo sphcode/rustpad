@@ -6,14 +6,19 @@ use std::{
     panic::{set_hook, take_hook},
 };
 mod annotatedstring;
+pub mod annotationtype;
 mod command;
 mod documentstatus;
 mod line;
 mod terminal;
 mod uicomponents;
-
-use annotatedstring::{AnnotatedString, AnnotationType};
+pub use annotationtype::AnnotationType;
+mod annotation;
+use annotation::Annotation;
+mod filetype;
+use annotatedstring::AnnotatedString;
 use documentstatus::DocumentStatus;
+use filetype::FileType;
 use line::Line;
 use terminal::Terminal;
 use uicomponents::{CommandBar, MessageBar, StatusBar, UIComponent, View};
